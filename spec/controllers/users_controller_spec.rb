@@ -26,8 +26,8 @@ describe UsersController do
     describe "as an admin user" do
 
       before(:each) do
-        admin = Factory(:user, :email => "admin@example.com", :admin => true)
-        test_sign_in(admin)
+        @admin = Factory(:user, :email => "admin@example.com", :admin => true)
+        test_sign_in(@admin)
       end
 
       it "should destroy the user" do
@@ -39,6 +39,12 @@ describe UsersController do
       it "should redirect to the users page" do
         delete :destroy, :id => @user
         response.should redirect_to(users_path)
+      end
+
+      it "should not allow the admin to delete themselves" do
+        lambda do
+          delete :destroy, :id => @admin
+        end.should_not change(User, :count)
       end
     end
   end
@@ -91,6 +97,17 @@ describe UsersController do
         response.should have_selector("a", :href => "/users?page=3",
                                            :content => "Next");
       end
+
+      it "should not show delete links to non-admin users" do
+        get :index
+        response.should_not have_selector("a", :content => "Delete")
+      end
+
+      it "should show delete links to admin users" do
+        @user.toggle!(:admin)
+        get :index
+        response.should have_selector("a", :content => "Delete")
+      end
     end
 
   end
@@ -125,6 +142,13 @@ describe UsersController do
       get :new
       response.should have_selector("input[name='user[password_confirmation]'][type='password']")
     end
+
+    it "should redirect to root url if already signed in" do
+      user = Factory(:user)
+      test_sign_in(user)
+      get :new
+      response.should redirect_to(root_path)
+    end
   end
 
   describe "GET 'show'" do
@@ -157,6 +181,7 @@ describe UsersController do
       get :show, :id => @user
       response.should have_selector("h1>img", :class => "gravatar")
     end
+
   end
 
   describe "POST 'new'" do
@@ -211,6 +236,27 @@ describe UsersController do
       it "should sign the user in" do
         post :create, :user => @attr
         controller.should be_signed_in
+      end
+    end
+
+    describe "when already signed in" do
+
+      before(:each) do
+        @user = Factory(:user)
+        test_sign_in(@user)
+        @attr = {  :name => "New User", :email => "user@example.com",
+                   :password => "foobar", :password_confirmation => "foobar"}
+      end
+
+      it "should not create a new user" do
+        lambda do
+          post :create, :user => @attr
+        end.should_not change(User, :count)
+      end
+
+      it "should redirect to the root url" do
+        post :create, :user => @attr
+        response.should redirect_to(root_path)
       end
     end
   end
